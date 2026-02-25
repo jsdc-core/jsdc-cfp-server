@@ -13,7 +13,7 @@ model Role {
 
 model Permission {
   id          String   @id @db.Uuid
-  key         String   @unique @db.VarChar(100) // e.g., submission:create
+  code        String   @unique @db.VarChar(100) // e.g., submission:create
   description String?  @db.VarChar(255)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")

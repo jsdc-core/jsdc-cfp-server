@@ -22,7 +22,7 @@ CREATE TABLE "roles" (
 -- CreateTable
 CREATE TABLE "permissions" (
     "id" UUID NOT NULL,
-    "key" VARCHAR(100) NOT NULL,
+    "code" VARCHAR(100) NOT NULL,
     "description" VARCHAR(255),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
@@ -44,7 +44,7 @@ CREATE TABLE "role_permissions" (
 CREATE UNIQUE INDEX "roles_name_key" ON "roles"("name");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "permissions_key_key" ON "permissions"("key");
+CREATE UNIQUE INDEX "permissions_code_key" ON "permissions"("code");
 
 -- AddForeignKey
 ALTER TABLE "member_roles" ADD CONSTRAINT "member_roles_member_id_fkey" FOREIGN KEY ("member_id") REFERENCES "members"("id") ON DELETE CASCADE ON UPDATE CASCADE;

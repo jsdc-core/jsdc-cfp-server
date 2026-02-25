@@ -10,7 +10,7 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  const permissionKeys = [
+  const permissionCodes = [
     "activity:create",
     "activity:edit",
     "activity:delete",
@@ -18,13 +18,13 @@ async function main() {
   ];
 
   const permissions = await Promise.all(
-    permissionKeys.map((key) =>
+    permissionCodes.map((code) =>
       prisma.permission.upsert({
-        where: { key },
+        where: { code },
         update: {},
         create: withId({
-          key,
-          description: `${key.replace(":", " ")} permission`,
+          code,
+          description: `${code.replace(":", " ")} permission`,
         }),
       }),
     ),
