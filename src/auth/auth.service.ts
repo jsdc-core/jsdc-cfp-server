@@ -2,7 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { GitHub } from "arctic";
 import { PrismaService } from "../prisma/prisma.service";
 import { JwtService } from "@nestjs/jwt";
-import { uuidv7 } from "uuidv7";
+import { withId } from "src/common/utils/db.util";
 
 interface GithubProfile {
   id: number;
@@ -19,6 +19,12 @@ interface GithubProfile {
 interface GithubSocial {
   provider: string;
   url: string;
+}
+
+interface JwtPayload {
+  sub: string;
+  email: string;
+  permissions: string[];
 }
 
 @Injectable()
@@ -56,8 +62,32 @@ export class AuthService {
     return response.json() as T;
   }
 
+  private async getUserPermissions(memberId: string): Promise<string[]> {
+    const permissions = new Set<string>();
+
+    const rolePermissions = await this.prisma.rolePermission.findMany({
+      where: {
+        role: {
+          members: {
+            some: { memberId },
+          },
+        },
+      },
+      include: {
+        permission: true,
+      },
+    });
+
+    rolePermissions.forEach((rp) => {
+      permissions.add(rp.permission.code);
+    });
+
+    return Array.from(permissions);
+  }
+
   async loginWithGithub(code: string) {
     try {
+      const provider = "github";
       const tokens = await this.github.validateAuthorizationCode(code);
       const accessToken = tokens.accessToken();
 
@@ -79,17 +109,17 @@ export class AuthService {
         );
       }
 
-      const githubProfileLink = {
-        id: uuidv7(),
+      const githubProfileLink = withId({
         type: "github",
         url: githubUser.html_url,
-      };
+      });
 
-      const otherSocialLinks = socialAccounts.map((account) => ({
-        id: uuidv7(),
-        type: account.provider,
-        url: account.url,
-      }));
+      const otherSocialLinks = socialAccounts.map((account) =>
+        withId({
+          type: account.provider,
+          url: account.url,
+        }),
+      );
 
       const allLinks = [githubProfileLink, ...otherSocialLinks];
 
@@ -100,8 +130,7 @@ export class AuthService {
 
       if (!user) {
         user = await this.prisma.member.create({
-          data: {
-            id: uuidv7(),
+          data: withId({
             email,
             displayName: githubUser.name || githubUser.login,
             avatarUrl: githubUser.avatar_url,
@@ -110,35 +139,38 @@ export class AuthService {
             location: githubUser.location,
             memberLinks: { create: allLinks },
             providers: {
-              create: {
-                id: uuidv7(),
-                provider: "github",
+              create: withId({
+                provider,
                 providerUserId: String(githubUser.id),
-              },
+              }),
             },
-          },
+          }),
 
           include: { providers: true },
         });
       } else {
-        const hasGithub = user.providers.some((p) => p.provider === "github");
+        const hasGithub = user.providers.some((p) => p.provider === provider);
         if (!hasGithub) {
           await this.prisma.memberProvider.create({
-            data: {
-              id: uuidv7(),
+            data: withId({
               memberId: user.id,
-              provider: "github",
+              provider,
               providerUserId: String(githubUser.id),
-            },
+            }),
           });
         }
       }
 
+      const permissions = await this.getUserPermissions(user.id);
+
+      const payload: JwtPayload = {
+        sub: user.id,
+        email: user.email,
+        permissions,
+      };
+
       return {
-        access_token: await this.jwtService.signAsync({
-          sub: user.id,
-          email: user.email,
-        }),
+        access_token: await this.jwtService.signAsync(payload),
       };
     } catch (error: unknown) {
       if (error instanceof UnauthorizedException) {
@@ -156,5 +188,49 @@ export class AuthService {
         `GitHub Authentication Failed: ${message}`,
       );
     }
+  }
+
+  async devLogin(email: string) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("This endpoint is only available in development");
+    }
+
+    let member = await this.prisma.member.findUnique({
+      where: { email },
+    });
+
+    if (!member) {
+      member = await this.prisma.member.create({
+        data: withId({
+          email,
+          displayName: email.split("@")[0],
+          providers: {
+            create: withId({
+              provider: "dev",
+              providerUserId: `dev_${Date.now()}`,
+            }),
+          },
+        }),
+      });
+    }
+
+    const permissions = await this.getUserPermissions(member.id);
+
+    const payload: JwtPayload = {
+      sub: member.id,
+      email: member.email,
+      permissions,
+    };
+
+    const access_token = await this.jwtService.signAsync(payload);
+
+    return {
+      access_token,
+      user: {
+        id: member.id,
+        email: member.email,
+        permissions,
+      },
+    };
   }
 }

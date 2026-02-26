@@ -1,9 +1,11 @@
 import "dotenv/config";
-import { NestFactory } from "@nestjs/core";
+import { NestFactory, Reflector } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import cookieParser from "cookie-parser";
 import { ValidationPipe } from "@nestjs/common";
+import { JwtAuthGuard } from "./auth/guards/jwt-auth.guard";
+import { PermissionGuard } from "./auth/guards/permission.guard";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -31,6 +33,12 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
       transform: true,
     }),
+  );
+
+  const reflector = app.get(Reflector);
+  app.useGlobalGuards(
+    new JwtAuthGuard(reflector),
+    new PermissionGuard(reflector),
   );
 
   await app.listen(process.env.PORT ?? 4000);

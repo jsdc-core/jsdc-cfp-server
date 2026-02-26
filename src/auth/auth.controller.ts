@@ -1,12 +1,14 @@
-import { Controller, Get, Query, Res, Req } from "@nestjs/common";
+import { Controller, Get, Query, Res, Req, Post, Body } from "@nestjs/common";
 import { AuthService } from "./auth.service";
 import type { Response, Request } from "express";
 import { generateState } from "arctic";
+import { Public } from "./decorators/public.decorator";
 
 @Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Public()
   @Get("github")
   githubLogin(@Res() res: Response) {
     const state = generateState();
@@ -22,6 +24,7 @@ export class AuthController {
     return res.redirect(url.toString());
   }
 
+  @Public()
   @Get("github/callback")
   async githubCallback(
     @Query("code") code: string,
@@ -74,5 +77,11 @@ export class AuthController {
         </script>
       `);
     }
+  }
+
+  @Public()
+  @Post("dev-login")
+  async devLogin(@Body() body: { email: string }) {
+    return this.authService.devLogin(body.email);
   }
 }
