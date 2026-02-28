@@ -15,11 +15,11 @@ model Activity {
 }
 
 model ActivityContent {
-  id          String @id @db.Uuid
-  activityId  String @map("activity_id") @db.Uuid
-  lang        String @db.VarChar(15)
-  title       String @db.VarChar(255)
-  description String @db.Text
+  id          String  @id @db.Uuid
+  activityId  String  @map("activity_id") @db.Uuid
+  lang        String  @db.VarChar(15)
+  title       String  @db.VarChar(255)
+  description String? @db.Text
 
   activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
 

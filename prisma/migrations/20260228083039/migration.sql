@@ -19,7 +19,7 @@ CREATE TABLE "activity_contents" (
     "activity_id" UUID NOT NULL,
     "lang" VARCHAR(15) NOT NULL,
     "title" VARCHAR(255) NOT NULL,
-    "description" TEXT NOT NULL,
+    "description" TEXT,
 
     CONSTRAINT "activity_contents_pkey" PRIMARY KEY ("id")
 );

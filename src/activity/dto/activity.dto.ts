@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional, PartialType } from "@nestjs/swagger";
 import { Transform, Type } from "class-transformer";
 import {
   IsString,
@@ -9,15 +9,42 @@ import {
   IsLocale,
   IsOptional,
   IsDate,
+  MaxLength,
+  IsNotEmpty,
+  ValidateNested,
 } from "class-validator";
+
+export class ActivityContentDto {
+  @ApiProperty({ example: "zh-TW" })
+  @IsString()
+  @IsNotEmpty()
+  @Transform(({ value }: { value: string }): string =>
+    typeof value === "string" ? value.toLowerCase() : value,
+  )
+  @MaxLength(15)
+  lang: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  title: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsOptional()
+  description?: string;
+}
 
 export class CreateActivityDto {
   @ApiProperty()
   @IsString()
+  @IsNotEmpty()
   name: string;
 
   @ApiProperty()
   @IsString()
+  @IsNotEmpty()
   @Transform(({ value }): string =>
     typeof value === "string" ? value.toLowerCase().trim() : value,
   )
@@ -31,11 +58,13 @@ export class CreateActivityDto {
   @ApiProperty()
   @Type(() => Date)
   @IsDate()
+  @IsNotEmpty()
   startAt: Date;
 
   @ApiProperty()
   @Type(() => Date)
   @IsDate()
+  @IsNotEmpty()
   endAt: Date;
 
   @ApiProperty({
@@ -44,6 +73,7 @@ export class CreateActivityDto {
     description: "List of supported language codes",
   })
   @IsArray()
+  @IsNotEmpty()
   @Transform(({ value }: { value: string[] }): string[] =>
     Array.isArray(value)
       ? value.map((v) => (typeof v === "string" ? v.toLowerCase() : v))
@@ -63,4 +93,12 @@ export class CreateActivityDto {
   @IsOptional()
   @Type(() => Date)
   closedAt?: Date;
+
+  @ApiProperty({ type: [ActivityContentDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ActivityContentDto)
+  contents: ActivityContentDto[];
 }
+
+export class UpdateActivityDto extends PartialType(CreateActivityDto) {}
