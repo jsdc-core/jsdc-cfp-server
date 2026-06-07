@@ -84,6 +84,13 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
+    "transformIgnorePatterns": [
+      "node_modules/(?!(arctic|passport-jwt)/)"
+    ],
+    "moduleNameMapper": {
+      "^src/(.*)$": "<rootDir>/$1",
+      "^(.+)\\.js$": "$1"
+    },
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],
