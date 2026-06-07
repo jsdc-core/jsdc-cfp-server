@@ -13,6 +13,7 @@ model Member {
   jobTitle     String?      @map("job_title") @db.VarChar(100)
   avatarUrl    String?      @map("avatar_url") @db.Text
   status       MemberStatus @default(ACTIVE)
+  tokenVersion Int          @default(1) @map("token_version")
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
 

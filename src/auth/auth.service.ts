@@ -3,6 +3,7 @@ import { GitHub } from "arctic";
 import { PrismaService } from "../prisma/prisma.service";
 import { JwtService } from "@nestjs/jwt";
 import { withId } from "src/common/utils/db.util";
+import { PermissionsCacheService } from "./services/permissions-cache.service";
 
 interface GithubProfile {
   id: number;
@@ -23,8 +24,7 @@ interface GithubSocial {
 
 interface JwtPayload {
   sub: string;
-  email: string;
-  permissions: string[];
+  v: number; // tokenVersion
 }
 
 @Injectable()
@@ -35,6 +35,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private permissionsCache: PermissionsCacheService,
   ) {
     this.github = new GitHub(
       process.env.GITHUB_CLIENT_ID!,
@@ -62,7 +63,7 @@ export class AuthService {
     return response.json() as T;
   }
 
-  private async getUserPermissions(memberId: string): Promise<string[]> {
+  async getUserPermissions(memberId: string): Promise<string[]> {
     const permissions = new Set<string>();
 
     const rolePermissions = await this.prisma.rolePermission.findMany({
@@ -161,12 +162,21 @@ export class AuthService {
         }
       }
 
-      const permissions = await this.getUserPermissions(user.id);
+      // Refresh full member record to ensure tokenVersion is present
+      const member = await this.prisma.member.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+
+      const permissions = await this.getUserPermissions(member.id);
+      await this.permissionsCache.setPermissions(member.id, permissions);
+      await this.permissionsCache.setTokenVersion(
+        member.id,
+        member.tokenVersion,
+      );
 
       const payload: JwtPayload = {
-        sub: user.id,
-        email: user.email,
-        permissions,
+        sub: member.id,
+        v: member.tokenVersion,
       };
 
       return {
@@ -215,11 +225,12 @@ export class AuthService {
     }
 
     const permissions = await this.getUserPermissions(member.id);
+    await this.permissionsCache.setPermissions(member.id, permissions);
+    await this.permissionsCache.setTokenVersion(member.id, member.tokenVersion);
 
     const payload: JwtPayload = {
       sub: member.id,
-      email: member.email,
-      permissions,
+      v: member.tokenVersion,
     };
 
     const access_token = await this.jwtService.signAsync(payload);
@@ -232,5 +243,18 @@ export class AuthService {
         permissions,
       },
     };
+  }
+
+  async bumpTokenVersion(memberId: string): Promise<void> {
+    const updated = await this.prisma.member.update({
+      where: { id: memberId },
+      data: { tokenVersion: { increment: 1 } },
+    });
+    await this.permissionsCache.invalidate(memberId);
+    await this.permissionsCache.setTokenVersion(memberId, updated.tokenVersion);
+  }
+
+  async invalidateUserCache(memberId: string): Promise<void> {
+    await this.permissionsCache.invalidate(memberId);
   }
 }
