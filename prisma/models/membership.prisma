@@ -1,0 +1,26 @@
+/// A scoped role binding: a member holds `role` within a given scope.
+/// - PLATFORM: organizationId & activityId both null (platform operators)
+/// - ORG:      organizationId set, activityId null
+/// - EVENT:    activityId set, organizationId null
+/// Exactly which FK is set must match `scopeType` (enforced in the service layer).
+model Membership {
+  id             String    @id @db.Uuid
+  memberId       String    @map("member_id") @db.Uuid
+  roleId         String    @map("role_id") @db.Uuid
+  scopeType      RoleScope @map("scope_type")
+  organizationId String?   @map("organization_id") @db.Uuid
+  activityId     String?   @map("activity_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  member       Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  role         Role          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  activity     Activity?     @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, roleId, scopeType, organizationId, activityId])
+  @@index([memberId])
+  @@index([organizationId])
+  @@index([activityId])
+  @@map("memberships")
+}

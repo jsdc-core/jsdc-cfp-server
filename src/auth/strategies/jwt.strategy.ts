@@ -6,6 +6,7 @@ import { Request } from "express";
 import { PermissionsCacheService } from "../services/permissions-cache.service";
 import { AuthService } from "../auth.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { ScopedPermissions } from "../types/scoped-permissions";
 
 export interface JwtPayloadToken {
   sub: string;
@@ -14,7 +15,7 @@ export interface JwtPayloadToken {
 
 export interface AuthUser {
   id: string;
-  permissions: string[];
+  permissions: ScopedPermissions;
   tokenVersion: number;
 }
 
@@ -60,7 +61,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     let permissions = await this.permissionsCache.getPermissions(payload.sub);
 
     if (permissions === undefined) {
-      permissions = await this.authService.getUserPermissions(payload.sub);
+      permissions = await this.authService.getScopedPermissions(payload.sub);
       await this.permissionsCache.setPermissions(payload.sub, permissions);
     }
 

@@ -47,4 +47,16 @@ export default tseslint.config(
       "@typescript-eslint/no-namespace": "off",
     },
   },
+  {
+    // Test files lean on `any` mocks (Prisma fixtures, supertest `res.body`,
+    // jest mock matchers). The unsafe-* / unbound-method rules add noise here.
+    files: ["test/**/*.ts", "**/*.spec.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
+      "@typescript-eslint/unbound-method": "off",
+    },
+  },
 );

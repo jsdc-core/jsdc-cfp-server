@@ -1,6 +1,7 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import type { Cache } from "cache-manager";
+import { ScopedPermissions } from "../types/scoped-permissions";
 
 @Injectable()
 export class PermissionsCacheService {
@@ -14,11 +15,16 @@ export class PermissionsCacheService {
     return `tv:${memberId}`;
   }
 
-  async getPermissions(memberId: string): Promise<string[] | undefined> {
-    return this.cacheManager.get<string[]>(this.permsKey(memberId));
+  async getPermissions(
+    memberId: string,
+  ): Promise<ScopedPermissions | undefined> {
+    return this.cacheManager.get<ScopedPermissions>(this.permsKey(memberId));
   }
 
-  async setPermissions(memberId: string, permissions: string[]): Promise<void> {
+  async setPermissions(
+    memberId: string,
+    permissions: ScopedPermissions,
+  ): Promise<void> {
     await this.cacheManager.set(this.permsKey(memberId), permissions);
   }
 
@@ -33,5 +39,25 @@ export class PermissionsCacheService {
   async invalidate(memberId: string): Promise<void> {
     await this.cacheManager.del(this.permsKey(memberId));
     await this.cacheManager.del(this.tvKey(memberId));
+  }
+
+  // --- activity -> organization mapping (for org->event permission cascade) ---
+  // Stores "" when the activity has no organization, undefined means cache miss.
+  private actOrgKey(activityId: string): string {
+    return `act_org:${activityId}`;
+  }
+
+  async getActivityOrg(activityId: string): Promise<string | undefined> {
+    return this.cacheManager.get<string>(this.actOrgKey(activityId));
+  }
+
+  async setActivityOrg(
+    activityId: string,
+    organizationId: string | null,
+  ): Promise<void> {
+    await this.cacheManager.set(
+      this.actOrgKey(activityId),
+      organizationId ?? "",
+    );
   }
 }

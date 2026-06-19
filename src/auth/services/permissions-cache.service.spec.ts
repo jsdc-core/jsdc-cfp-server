@@ -38,7 +38,11 @@ describe("PermissionsCacheService", () => {
     });
 
     it("should set and get permissions", async () => {
-      const perms = ["activity:manage", "submission:read"];
+      const perms = {
+        platform: ["activity:manage"],
+        org: { "org-1": ["org:profile"] },
+        event: {},
+      };
       jest.spyOn(cacheManager, "set").mockResolvedValue(undefined);
       jest.spyOn(cacheManager, "get").mockResolvedValue(perms);
 
@@ -47,6 +51,20 @@ describe("PermissionsCacheService", () => {
 
       expect(cacheManager.set).toHaveBeenCalledWith("perms:member-1", perms);
       expect(result).toEqual(perms);
+    });
+  });
+
+  describe("activity -> org mapping", () => {
+    it("stores empty string when the activity has no org", async () => {
+      jest.spyOn(cacheManager, "set").mockResolvedValue(undefined);
+      await service.setActivityOrg("act-1", null);
+      expect(cacheManager.set).toHaveBeenCalledWith("act_org:act-1", "");
+    });
+
+    it("stores the org id when present", async () => {
+      jest.spyOn(cacheManager, "set").mockResolvedValue(undefined);
+      await service.setActivityOrg("act-1", "org-1");
+      expect(cacheManager.set).toHaveBeenCalledWith("act_org:act-1", "org-1");
     });
   });
 

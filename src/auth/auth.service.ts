@@ -4,6 +4,8 @@ import { PrismaService } from "../prisma/prisma.service";
 import { JwtService } from "@nestjs/jwt";
 import { withId } from "src/common/utils/db.util";
 import { PermissionsCacheService } from "./services/permissions-cache.service";
+import { RefreshTokenService } from "./services/refresh-token.service";
+import { ScopedPermissions } from "./types/scoped-permissions";
 
 interface GithubProfile {
   id: number;
@@ -36,6 +38,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private permissionsCache: PermissionsCacheService,
+    private refreshTokenService: RefreshTokenService,
   ) {
     this.github = new GitHub(
       process.env.GITHUB_CLIENT_ID!,
@@ -63,27 +66,71 @@ export class AuthService {
     return response.json() as T;
   }
 
-  async getUserPermissions(memberId: string): Promise<string[]> {
-    const permissions = new Set<string>();
-
-    const rolePermissions = await this.prisma.rolePermission.findMany({
-      where: {
-        role: {
-          members: {
-            some: { memberId },
-          },
-        },
-      },
+  async getScopedPermissions(memberId: string): Promise<ScopedPermissions> {
+    const memberships = await this.prisma.membership.findMany({
+      where: { memberId },
       include: {
-        permission: true,
+        role: { include: { permissions: { include: { permission: true } } } },
       },
     });
 
-    rolePermissions.forEach((rp) => {
-      permissions.add(rp.permission.code);
-    });
+    const platform = new Set<string>();
+    const org: Record<string, Set<string>> = {};
+    const event: Record<string, Set<string>> = {};
 
-    return Array.from(permissions);
+    for (const m of memberships) {
+      const codes = m.role.permissions.map((rp) => rp.permission.code);
+      if (m.scopeType === "PLATFORM") {
+        codes.forEach((c) => platform.add(c));
+      } else if (m.scopeType === "ORG" && m.organizationId) {
+        const bucket = (org[m.organizationId] ??= new Set());
+        codes.forEach((c) => bucket.add(c));
+      } else if (m.scopeType === "EVENT" && m.activityId) {
+        const bucket = (event[m.activityId] ??= new Set());
+        codes.forEach((c) => bucket.add(c));
+      }
+    }
+
+    const materialize = (rec: Record<string, Set<string>>) =>
+      Object.fromEntries(
+        Object.entries(rec).map(([id, set]) => [id, Array.from(set)]),
+      );
+
+    return {
+      platform: Array.from(platform),
+      org: materialize(org),
+      event: materialize(event),
+    };
+  }
+
+  /**
+   * Warm the cache for a member and sign a fresh access JWT.
+   * Does NOT issue a refresh token — callers do that separately when needed.
+   */
+  async issueAccessToken(
+    memberId: string,
+  ): Promise<{ accessToken: string; permissions: ScopedPermissions }> {
+    const member = await this.prisma.member.findUniqueOrThrow({
+      where: { id: memberId },
+    });
+    const permissions = await this.getScopedPermissions(member.id);
+    await this.permissionsCache.setPermissions(member.id, permissions);
+    await this.permissionsCache.setTokenVersion(member.id, member.tokenVersion);
+
+    const payload: JwtPayload = { sub: member.id, v: member.tokenVersion };
+    const accessToken = await this.jwtService.signAsync(payload);
+
+    return { accessToken, permissions };
+  }
+
+  async issueSession(memberId: string): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    permissions: ScopedPermissions;
+  }> {
+    const { accessToken, permissions } = await this.issueAccessToken(memberId);
+    const refreshToken = await this.refreshTokenService.issue(memberId);
+    return { accessToken, refreshToken, permissions };
   }
 
   async loginWithGithub(code: string) {
@@ -162,25 +209,11 @@ export class AuthService {
         }
       }
 
-      // Refresh full member record to ensure tokenVersion is present
-      const member = await this.prisma.member.findUniqueOrThrow({
-        where: { id: user.id },
-      });
-
-      const permissions = await this.getUserPermissions(member.id);
-      await this.permissionsCache.setPermissions(member.id, permissions);
-      await this.permissionsCache.setTokenVersion(
-        member.id,
-        member.tokenVersion,
-      );
-
-      const payload: JwtPayload = {
-        sub: member.id,
-        v: member.tokenVersion,
-      };
+      const session = await this.issueSession(user.id);
 
       return {
-        access_token: await this.jwtService.signAsync(payload),
+        access_token: session.accessToken,
+        refresh_token: session.refreshToken,
       };
     } catch (error: unknown) {
       if (error instanceof UnauthorizedException) {
@@ -224,23 +257,15 @@ export class AuthService {
       });
     }
 
-    const permissions = await this.getUserPermissions(member.id);
-    await this.permissionsCache.setPermissions(member.id, permissions);
-    await this.permissionsCache.setTokenVersion(member.id, member.tokenVersion);
-
-    const payload: JwtPayload = {
-      sub: member.id,
-      v: member.tokenVersion,
-    };
-
-    const access_token = await this.jwtService.signAsync(payload);
+    const session = await this.issueSession(member.id);
 
     return {
-      access_token,
+      access_token: session.accessToken,
+      refresh_token: session.refreshToken,
       user: {
         id: member.id,
         email: member.email,
-        permissions,
+        permissions: session.permissions,
       },
     };
   }
@@ -252,6 +277,7 @@ export class AuthService {
     });
     await this.permissionsCache.invalidate(memberId);
     await this.permissionsCache.setTokenVersion(memberId, updated.tokenVersion);
+    await this.refreshTokenService.revokeAllForMember(memberId);
   }
 
   async invalidateUserCache(memberId: string): Promise<void> {

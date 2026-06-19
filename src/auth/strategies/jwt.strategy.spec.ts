@@ -34,7 +34,7 @@ describe("JwtStrategy", () => {
     } as unknown as jest.Mocked<PrismaService>;
 
     const authServiceMock = {
-      getUserPermissions: jest.fn(),
+      getScopedPermissions: jest.fn(),
     } as unknown as jest.Mocked<AuthService>;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -51,11 +51,9 @@ describe("JwtStrategy", () => {
     }).compile();
 
     strategy = module.get<JwtStrategy>(JwtStrategy);
-    permissionsCache = module.get(
-      PermissionsCacheService,
-    ) as jest.Mocked<PermissionsCacheService>;
-    prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
-    authService = module.get(AuthService) as jest.Mocked<AuthService>;
+    permissionsCache = module.get(PermissionsCacheService);
+    prisma = module.get(PrismaService);
+    authService = module.get(AuthService);
   });
 
   it("should be defined", () => {
@@ -65,7 +63,11 @@ describe("JwtStrategy", () => {
   describe("validate", () => {
     it("should return AuthUser when tokenVersion matches and permissions are cached", async () => {
       const payload: JwtPayloadToken = { sub: "member-1", v: 1 };
-      const cachedPermissions = ["activity:manage"];
+      const cachedPermissions = {
+        platform: ["activity:manage"],
+        org: {},
+        event: {},
+      };
 
       permissionsCache.getTokenVersion.mockResolvedValue(1);
       permissionsCache.getPermissions.mockResolvedValue(cachedPermissions);
@@ -83,7 +85,11 @@ describe("JwtStrategy", () => {
 
     it("should fallback to DB when tokenVersion is not cached", async () => {
       const payload: JwtPayloadToken = { sub: "member-1", v: 1 };
-      const cachedPermissions = ["activity:manage"];
+      const cachedPermissions = {
+        platform: ["activity:manage"],
+        org: {},
+        event: {},
+      };
 
       permissionsCache.getTokenVersion.mockResolvedValue(undefined);
       prisma.member.findUnique.mockResolvedValue({
@@ -98,23 +104,33 @@ describe("JwtStrategy", () => {
         where: { id: "member-1" },
         select: { tokenVersion: true },
       });
-      expect(permissionsCache.setTokenVersion).toHaveBeenCalledWith("member-1", 1);
+      expect(permissionsCache.setTokenVersion).toHaveBeenCalledWith(
+        "member-1",
+        1,
+      );
       expect(result.tokenVersion).toBe(1);
     });
 
     it("should fallback to DB when permissions are not cached", async () => {
       const payload: JwtPayloadToken = { sub: "member-1", v: 1 };
-      const dbPermissions = ["activity:manage", "submission:read"];
+      const dbPermissions = {
+        platform: ["activity:manage"],
+        org: { "org-1": ["org:profile"] },
+        event: {},
+      };
 
       permissionsCache.getTokenVersion.mockResolvedValue(1);
       permissionsCache.getPermissions.mockResolvedValue(undefined);
-      authService.getUserPermissions.mockResolvedValue(dbPermissions);
+      authService.getScopedPermissions.mockResolvedValue(dbPermissions);
       permissionsCache.setPermissions.mockResolvedValue(undefined);
 
       const result = await strategy.validate(payload);
 
-      expect(authService.getUserPermissions).toHaveBeenCalledWith("member-1");
-      expect(permissionsCache.setPermissions).toHaveBeenCalledWith("member-1", dbPermissions);
+      expect(authService.getScopedPermissions).toHaveBeenCalledWith("member-1");
+      expect(permissionsCache.setPermissions).toHaveBeenCalledWith(
+        "member-1",
+        dbPermissions,
+      );
       expect(result.permissions).toEqual(dbPermissions);
     });
 

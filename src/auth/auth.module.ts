@@ -7,6 +7,7 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { PermissionGuard } from "./guards/permission.guard";
 import { PermissionsCacheService } from "./services/permissions-cache.service";
+import { RefreshTokenService } from "./services/refresh-token.service";
 
 @Module({
   imports: [
@@ -24,12 +25,14 @@ import { PermissionsCacheService } from "./services/permissions-cache.service";
     JwtAuthGuard,
     PermissionGuard,
     PermissionsCacheService,
+    RefreshTokenService,
   ],
   exports: [
     AuthService,
     JwtAuthGuard,
     PermissionGuard,
     PermissionsCacheService,
+    RefreshTokenService,
   ],
 })
 export class AuthModule {}

@@ -1,0 +1,14 @@
+model Organization {
+  id          String   @id @db.Uuid
+  name        String   @db.VarChar(255)
+  slug        String   @unique @db.VarChar(255) // URL path segment, e.g., 'jsdc'
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  activities  Activity[]
+  memberships Membership[]
+  invitations Invitation[]
+
+  @@map("organizations")
+}

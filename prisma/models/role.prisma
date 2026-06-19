@@ -1,13 +1,22 @@
+enum RoleScope {
+  PLATFORM
+  ORG
+  EVENT
+}
+
 model Role {
-  id          String   @id @db.Uuid
-  name        String   @unique @db.VarChar(50)
-  description String?  @db.VarChar(255)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id          String    @id @db.Uuid
+  name        String    @db.VarChar(50)
+  scope       RoleScope @default(PLATFORM)
+  description String?   @db.VarChar(255)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  members     MemberRole[]
+  memberships Membership[]
   permissions RolePermission[]
+  invitations Invitation[]
 
+  @@unique([name, scope])
   @@map("roles")
 }
 

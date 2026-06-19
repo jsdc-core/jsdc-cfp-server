@@ -1,0 +1,33 @@
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+/// Email invitation to join a scope (org/event) with a given role.
+/// Mirrors KKTIX: 7-day expiry, accept/reject, status tracked for the member list.
+model Invitation {
+  id             String           @id @db.Uuid
+  email          String           @db.VarChar(255)
+  token          String           @unique @db.VarChar(255)
+  status         InvitationStatus @default(PENDING)
+  scopeType      RoleScope        @map("scope_type")
+  organizationId String?          @map("organization_id") @db.Uuid
+  activityId     String?          @map("activity_id") @db.Uuid
+  roleId         String           @map("role_id") @db.Uuid
+  invitedById    String           @map("invited_by_id") @db.Uuid
+  expiresAt      DateTime         @map("expires_at")
+  respondedAt    DateTime?        @map("responded_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  activity     Activity?     @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  role         Role          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  invitedBy    Member        @relation("InvitationsSent", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([organizationId])
+  @@index([activityId])
+  @@map("invitations")
+}
