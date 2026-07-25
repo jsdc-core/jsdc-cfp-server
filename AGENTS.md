@@ -53,11 +53,32 @@ This is a NestJS + Prisma + PostgreSQL API server for a conference CFP (Call for
 
 **Auth flow (`src/auth/`):**
 - GitHub OAuth via the `arctic` library. Callback sets an `access_token` httpOnly cookie containing a JWT.
-- JWT payload carries `{ sub: memberId, email, permissions: string[] }`. Permissions are resolved at login time by walking `Member → MemberRole → Role → RolePermission → Permission`.
+- JWT only carries `{ sub: memberId, v: tokenVersion }` — **no permissions in the token**. Permissions are stored in an in-memory cache (`@nestjs/cache-manager`) and loaded by `JwtStrategy.validate()` on every request.
+- Cache miss fallback: if permissions aren't cached, `JwtStrategy` queries the database and populates the cache.
 - `POST /auth/dev-login` is available in non-production for quick local testing without GitHub OAuth.
-- To mark a route public: use the `@Public()` decorator. To require a permission: use `@Permissions('permission:code')`.
 
-**Permission model (`prisma/models/role.prisma`):** `Member` → `MemberRole` (join) → `Role` → `RolePermission` (join) → `Permission`. Permissions use colon-namespaced codes (e.g., `activity:manage`). Seed creates an `admin` role with all permissions.
+**Scoped RBAC (`src/auth/`):**
+- Three permission scopes: `PLATFORM` (global), `ORG` (organization-level), `EVENT` (activity-level).
+- `AuthService.getScopedPermissions()` returns `{ platform: string[], org: Record<orgId, string[]>, event: Record<eventId, string[]> }`.
+- **ORG permissions cascade to all events under that organization** — the guard resolves `activity → organization` in real-time and merges org permissions into the event scope.
+- To mark a route public: use the `@Public()` decorator.
+- To require permissions in a specific scope: use `@RequirePermissions({ scope: "EVENT", param: "activityId", perms: ["event:edit"] })`.
+- Legacy `@Permissions('permission:code')` still works — treated as `PLATFORM` scope.
+
+**Permission invalidation:**
+- Call `AuthService.bumpTokenVersion(memberId)` to revoke all tokens for a user. This increments `tokenVersion`, invalidates the cache, and revokes all refresh tokens. Existing JWTs immediately receive 401.
+
+**Permission codes (seed):**
+- `org:profile`, `org:finance`, `org:member:manage`, `org:report`
+- `event:edit`, `event:registration:read`, `event:checkin`, `event:order:manage`
+- `activity:manage`, `permission:manage`, `role:manage` (platform)
+
+**Permission model:** `Member` → `Membership` (join with scope) → `Role` → `RolePermission` (join) → `Permission`.
+- `Membership` includes `scopeType` (PLATFORM | ORG | EVENT) and optional `organizationId` / `activityId` FKs.
+- Permissions use colon-namespaced codes (e.g., `event:edit`). Seed creates scoped roles:
+  - PLATFORM: `admin` (all platform permissions)
+  - ORG: `Owner`, `Admin`, `Accountant`
+  - EVENT: `Admin`, `Creator`, `Accountant`, `Checkin`, `Streaming`
 
 **Prisma setup:**
 - Schema is split across `prisma/models/*.prisma` files; `prisma.config.ts` points Prisma at the `prisma/` directory.
