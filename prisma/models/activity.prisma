@@ -2,6 +2,7 @@ model Activity {
   id                 String    @id @db.Uuid
   name               String    @db.VarChar(255)
   slug               String    @unique @db.VarChar(255) // URL path segment, e.g., 'jsdc-2026'
+  organizationId     String?   @map("organization_id") @db.Uuid
   startAt            DateTime  @map("start_at")
   endAt              DateTime  @map("end_at")
   supportedLanguages String[]  @map("supported_languages")
@@ -9,8 +10,12 @@ model Activity {
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
 
-  contents ActivityContent[]
+  organization Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contents     ActivityContent[]
+  memberships  Membership[]
+  invitations  Invitation[]
 
+  @@index([organizationId])
   @@map("activities")
 }
 

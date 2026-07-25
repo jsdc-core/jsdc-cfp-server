@@ -12,6 +12,7 @@ import {
   MaxLength,
   IsNotEmpty,
   ValidateNested,
+  IsUUID,
 } from "class-validator";
 
 export class ActivityContentDto {
@@ -37,6 +38,11 @@ export class ActivityContentDto {
 }
 
 export class CreateActivityDto {
+  @ApiProperty({ description: "Organization ID" })
+  @IsUUID()
+  @IsNotEmpty()
+  organizationId: string;
+
   @ApiProperty()
   @IsString()
   @IsNotEmpty()

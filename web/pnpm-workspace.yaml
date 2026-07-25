@@ -1,0 +1,3 @@
+# Keep web/ as a self-contained pnpm project, isolated from the backend
+# workspace root one level up. Its own node_modules / lockfile live here.
+packages: []

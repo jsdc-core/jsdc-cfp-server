@@ -30,6 +30,7 @@ export class ActivityService {
       data: withId({
         name: dto.name,
         slug: dto.slug,
+        organizationId: dto.organizationId,
         startAt: dto.startAt,
         endAt: dto.endAt,
         closedAt: dto.closedAt || null,

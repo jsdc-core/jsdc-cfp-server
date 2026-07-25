@@ -6,11 +6,17 @@ import cookieParser from "cookie-parser";
 import { ValidationPipe } from "@nestjs/common";
 import { JwtAuthGuard } from "./auth/guards/jwt-auth.guard";
 import { PermissionGuard } from "./auth/guards/permission.guard";
+import { PrismaService } from "./prisma/prisma.service";
+import { PermissionsCacheService } from "./auth/services/permissions-cache.service";
+import express from "express";
+import { join } from "node:path";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.use(cookieParser());
+
+  app.use("/ui", express.static(join(process.cwd(), "public")));
 
   app.enableCors({
     origin: process.env.CLIENT_URL || "http://localhost:3000",
@@ -36,9 +42,11 @@ async function bootstrap() {
   );
 
   const reflector = app.get(Reflector);
+  const prisma = app.get(PrismaService);
+  const permissionsCache = app.get(PermissionsCacheService);
   app.useGlobalGuards(
     new JwtAuthGuard(reflector),
-    new PermissionGuard(reflector),
+    new PermissionGuard(reflector, prisma, permissionsCache),
   );
 
   await app.listen(process.env.PORT ?? 4000);

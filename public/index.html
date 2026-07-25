@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Auth Mock UI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        --bg: #0e0f12;
+        --panel: #181a20;
+        --border: #2a2d36;
+        --text: #e4e6eb;
+        --muted: #8a8f9c;
+        --accent: #6aa9ff;
+        --ok: #6ee7a7;
+        --err: #ff7a7a;
+        --warn: #ffd166;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        margin: 0;
+        padding: 24px;
+        line-height: 1.4;
+      }
+      h1 { margin: 0 0 16px; font-size: 20px; }
+      h2 { margin: 0 0 12px; font-size: 15px; color: var(--accent); }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+      }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; align-items: center; }
+      input, button, select, textarea {
+        background: #11131a;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 6px 10px;
+        font-size: 13px;
+        font-family: inherit;
+      }
+      input, select, textarea { min-width: 0; flex: 1; }
+      button {
+        cursor: pointer;
+        background: #232734;
+        white-space: nowrap;
+      }
+      button:hover { background: #2d313f; }
+      button.primary { background: var(--accent); color: #06101e; font-weight: 600; }
+      button.primary:hover { background: #84baff; }
+      button.danger { background: #3a1f1f; color: var(--err); }
+      label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+      pre {
+        background: #0a0b0f;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 10px;
+        margin: 8px 0 0;
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 200px;
+        overflow: auto;
+      }
+      .status { font-size: 11px; padding: 2px 6px; border-radius: 3px; margin-right: 6px; }
+      .status.ok { background: #143a26; color: var(--ok); }
+      .status.err { background: #3a1414; color: var(--err); }
+      .muted { color: var(--muted); font-size: 12px; }
+      .footer { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+      .pill { display: inline-block; background: #232734; padding: 2px 6px; border-radius: 3px; font-size: 11px; margin: 2px; }
+    </style>
+  </head>
+  <body>
+    <h1>Auth Mock UI — form-platform-server</h1>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>Auth lifecycle</h2>
+        <div class="row">
+          <input id="email" type="email" placeholder="you@example.com" value="you@example.com" />
+          <button id="btn-dev-login" class="primary">Dev login</button>
+        </div>
+        <div class="row">
+          <button id="btn-github">GitHub login</button>
+          <button id="btn-me">GET /me</button>
+          <button id="btn-refresh">Refresh</button>
+          <button id="btn-logout" class="danger">Logout</button>
+        </div>
+        <div class="muted">Visible cookies: <span id="cookies"></span></div>
+        <div class="muted">httpOnly cookies (access_token, refresh_token) won't appear above — by design.</div>
+        <pre id="auth-out">No calls yet.</pre>
+      </section>
+
+      <section class="panel">
+        <h2>Current /me snapshot</h2>
+        <div class="row">
+          <button id="btn-me-2">Re-check /me</button>
+        </div>
+        <pre id="me-out">Click "Re-check /me" or run any call above.</pre>
+        <div class="muted" style="margin-top: 8px">Permissions:</div>
+        <div id="perm-pills"></div>
+      </section>
+
+      <section class="panel" style="grid-column: 1 / -1">
+        <h2>RBAC admin</h2>
+        <div class="muted" style="margin-bottom: 12px">
+          Requires <span class="pill">permission:manage</span> and <span class="pill">role:manage</span>.
+          Bootstrap admin: run <code>npx prisma studio</code>, find your member, attach the <code>admin</code> role
+          (created by <code>npx prisma db seed</code>), then click <b>Refresh</b> above to pick up the new perms.
+        </div>
+
+        <div class="grid">
+          <div>
+            <h2 style="font-size: 13px">Permissions</h2>
+            <div class="row">
+              <button id="btn-list-perms">List</button>
+              <input id="new-perm-code" placeholder="e.g. activity:read" />
+              <button id="btn-create-perm" class="primary">Create</button>
+            </div>
+            <pre id="perms-out">—</pre>
+          </div>
+
+          <div>
+            <h2 style="font-size: 13px">Roles</h2>
+            <div class="row">
+              <button id="btn-list-roles">List</button>
+              <select id="list-role-scope">
+                <option value="">(all scopes)</option>
+                <option value="PLATFORM">PLATFORM</option>
+                <option value="ORG">ORG</option>
+                <option value="EVENT">EVENT</option>
+              </select>
+            </div>
+            <div class="row">
+              <input id="new-role-name" placeholder="role name" />
+              <select id="new-role-scope">
+                <option value="PLATFORM">PLATFORM</option>
+                <option value="ORG">ORG</option>
+                <option value="EVENT">EVENT</option>
+              </select>
+            </div>
+            <div class="row">
+              <label style="flex:1">
+                Permission IDs (comma-separated UUIDs)
+                <input id="new-role-perm-ids" placeholder="copy from List permissions output" />
+              </label>
+              <button id="btn-create-role" class="primary">Create</button>
+            </div>
+            <pre id="roles-out">—</pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" style="grid-column: 1 / -1">
+        <h2>Organizations &amp; scoped membership (KKTIX-style)</h2>
+        <div class="muted" style="margin-bottom: 12px">
+          Tip: create an org → you auto-become its <b>Owner</b>. The org id then auto-fills
+          the Assign / Invite panels, role dropdowns load from the seed, and a sent invite
+          auto-fills the Accept token. No UUID copy-pasting needed.
+          <span id="catalog-status" class="muted"></span>
+        </div>
+        <div class="grid">
+          <div>
+            <h2 style="font-size: 13px">Organizations</h2>
+            <div class="row">
+              <input id="new-org-name" placeholder="org name" />
+              <input id="new-org-slug" placeholder="slug (a-z0-9-)" />
+              <button id="btn-create-org" class="primary">Create (you become Owner)</button>
+            </div>
+            <div class="row">
+              <button id="btn-list-orgs">List my orgs</button>
+            </div>
+            <pre id="orgs-out">—</pre>
+          </div>
+
+          <div>
+            <h2 style="font-size: 13px">Assign roles in a scope</h2>
+            <div class="row">
+              <select id="scope-type">
+                <option value="organizations">ORG (organizations)</option>
+                <option value="activities">EVENT (activities)</option>
+              </select>
+              <input id="scope-id" placeholder="org / activity UUID (auto-filled)" />
+            </div>
+            <div class="row">
+              <input id="target-member-id" placeholder="target member UUID (defaults to you)" />
+              <select id="assign-role-id" title="roles for the selected scope"></select>
+            </div>
+            <div class="row">
+              <button id="btn-assign-roles" class="primary">Replace roles</button>
+              <button id="btn-list-member-roles">List roles</button>
+            </div>
+            <div class="muted">
+              After replace, target's access cookie is immediately revoked
+              (tokenVersion bumped). Org roles cascade down to that org's activities.
+            </div>
+            <pre id="assign-out">—</pre>
+          </div>
+
+          <div style="grid-column: 1 / -1">
+            <h2 style="font-size: 13px">Invitations</h2>
+            <div class="row">
+              <select id="inv-scope-type">
+                <option value="organizations">ORG</option>
+                <option value="activities">EVENT</option>
+              </select>
+              <input id="inv-scope-id" placeholder="org / activity UUID (auto-filled)" />
+              <input id="inv-email" placeholder="invitee email" />
+              <select id="inv-role-id" title="roles for the selected scope"></select>
+              <button id="btn-send-invite" class="primary">Send invite</button>
+              <button id="btn-list-invites">List</button>
+            </div>
+            <div class="row">
+              <input id="accept-token" placeholder="invitation token (from invite output / email log)" />
+              <button id="btn-accept-invite" class="primary">Accept (as logged-in user)</button>
+              <button id="btn-reject-invite" class="danger">Reject</button>
+            </div>
+            <div class="muted">
+              Invites expire after 7 days. Accept/Reject use the token and require the
+              logged-in user's email to match the invitee.
+            </div>
+            <pre id="invites-out">—</pre>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="footer">
+      Swagger docs at <a style="color:var(--accent)" href="/docs">/docs</a>.
+      Same-origin with the API (http://localhost:4000), so cookies just work.
+    </div>
+
+    <script>
+      const API = "/api/v1";
+      const $ = (id) => document.getElementById(id);
+
+      function refreshCookieDisplay() {
+        $("cookies").textContent = document.cookie || "(none visible)";
+      }
+      refreshCookieDisplay();
+
+      async function call(method, path, body) {
+        const opts = {
+          method,
+          credentials: "include",
+          headers: body ? { "Content-Type": "application/json" } : {},
+          body: body ? JSON.stringify(body) : undefined,
+        };
+        const res = await fetch(API + path, opts);
+        let data;
+        try {
+          data = await res.json();
+        } catch {
+          data = await res.text().catch(() => "");
+        }
+        refreshCookieDisplay();
+        return { status: res.status, ok: res.ok, data };
+      }
+
+      function render(elId, result) {
+        const el = $(elId);
+        const cls = result.ok ? "ok" : "err";
+        el.innerHTML =
+          `<span class="status ${cls}">${result.status}</span>` +
+          (typeof result.data === "string"
+            ? escapeHtml(result.data)
+            : escapeHtml(JSON.stringify(result.data, null, 2)));
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      // --- Auth lifecycle ---
+      $("btn-dev-login").onclick = async () => {
+        const result = await call("POST", "/auth/dev-login", {
+          email: $("email").value.trim(),
+        });
+        render("auth-out", result);
+        await refreshMe();
+      };
+
+      $("btn-github").onclick = () => {
+        const w = window.open(API + "/auth/github", "github_oauth", "width=600,height=700");
+        window.addEventListener("message", async (ev) => {
+          if (ev.data && ev.data.type === "AUTH_SUCCESS") {
+            render("auth-out", { status: 200, ok: true, data: "GitHub login complete" });
+            await refreshMe();
+          } else if (ev.data && ev.data.type === "AUTH_ERROR") {
+            render("auth-out", { status: 401, ok: false, data: ev.data });
+          }
+        }, { once: true });
+      };
+
+      $("btn-me").onclick = async () => render("auth-out", await call("GET", "/auth/me"));
+      $("btn-me-2").onclick = refreshMe;
+      $("btn-refresh").onclick = async () => {
+        render("auth-out", await call("POST", "/auth/refresh"));
+        await refreshMe();
+      };
+      $("btn-logout").onclick = async () => {
+        render("auth-out", await call("POST", "/auth/logout"));
+        await refreshMe();
+      };
+
+      async function refreshMe() {
+        const result = await call("GET", "/auth/me");
+        render("me-out", result);
+        const pills = $("perm-pills");
+        pills.innerHTML = "";
+        const perms = result.ok ? result.data.permissions : null;
+        if (perms && typeof perms === "object") {
+          const addBucket = (label, codes) => {
+            if (!codes || codes.length === 0) return;
+            const tag = document.createElement("span");
+            tag.className = "pill";
+            tag.style.background = "#143a26";
+            tag.textContent = `${label}: ${codes.join(", ")}`;
+            pills.appendChild(tag);
+          };
+          addBucket("platform", perms.platform);
+          for (const [orgId, codes] of Object.entries(perms.org || {})) {
+            addBucket(`org:${orgId.slice(0, 8)}`, codes);
+          }
+          for (const [actId, codes] of Object.entries(perms.event || {})) {
+            addBucket(`event:${actId.slice(0, 8)}`, codes);
+          }
+          if (!pills.children.length) {
+            pills.innerHTML = '<span class="muted">(none)</span>';
+          }
+          // auto-fill target member id with self for convenience
+          if (!$("target-member-id").value) $("target-member-id").value = result.data.id;
+        }
+      }
+
+      // --- RBAC ---
+      $("btn-list-perms").onclick = async () =>
+        render("perms-out", await call("GET", "/permissions"));
+
+      $("btn-create-perm").onclick = async () => {
+        const code = $("new-perm-code").value.trim();
+        render("perms-out", await call("POST", "/permissions", { code }));
+      };
+
+      $("btn-list-roles").onclick = async () => {
+        const scope = $("list-role-scope").value;
+        const qs = scope ? `?scope=${scope}` : "";
+        render("roles-out", await call("GET", `/roles${qs}`));
+      };
+
+      $("btn-create-role").onclick = async () => {
+        const name = $("new-role-name").value.trim();
+        const scope = $("new-role-scope").value;
+        const permissionIds = $("new-role-perm-ids")
+          .value.split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        render(
+          "roles-out",
+          await call("POST", "/roles", { name, scope, permissionIds }),
+        );
+      };
+
+      // --- Role catalog (dev-only endpoint) powers the role dropdowns ---
+      let ROLE_CATALOG = [];
+      const scopeOf = (typeVal) =>
+        typeVal === "organizations" ? "ORG" : "EVENT";
+
+      function populateRoleSelect(selectId, scope) {
+        const sel = $(selectId);
+        const prev = sel.value;
+        sel.innerHTML = "";
+        const roles = ROLE_CATALOG.filter((r) => r.scope === scope);
+        if (!roles.length) {
+          const o = document.createElement("option");
+          o.value = "";
+          o.textContent = `(no ${scope} roles — run db seed)`;
+          sel.appendChild(o);
+          return;
+        }
+        for (const r of roles) {
+          const o = document.createElement("option");
+          o.value = r.id;
+          o.textContent = `${r.name} · ${scope}`;
+          sel.appendChild(o);
+        }
+        if (prev) sel.value = prev;
+      }
+
+      async function loadRoleCatalog() {
+        const res = await call("GET", "/roles/catalog");
+        if (res.ok && Array.isArray(res.data)) {
+          ROLE_CATALOG = res.data;
+          $("catalog-status").textContent = ` · ${res.data.length} roles loaded`;
+        } else {
+          $("catalog-status").textContent =
+            " · role catalog unavailable (production?)";
+        }
+        populateRoleSelect("assign-role-id", scopeOf($("scope-type").value));
+        populateRoleSelect("inv-role-id", scopeOf($("inv-scope-type").value));
+      }
+
+      $("scope-type").onchange = () =>
+        populateRoleSelect("assign-role-id", scopeOf($("scope-type").value));
+      $("inv-scope-type").onchange = () =>
+        populateRoleSelect("inv-role-id", scopeOf($("inv-scope-type").value));
+
+      $("btn-assign-roles").onclick = async () => {
+        const scope = $("scope-type").value; // "organizations" | "activities"
+        const scopeId = $("scope-id").value.trim();
+        const memberId = $("target-member-id").value.trim();
+        const roleIds = [$("assign-role-id").value].filter(Boolean);
+        render(
+          "assign-out",
+          await call("PUT", `/${scope}/${scopeId}/members/${memberId}/roles`, {
+            roleIds,
+          }),
+        );
+      };
+
+      $("btn-list-member-roles").onclick = async () => {
+        const scope = $("scope-type").value;
+        const scopeId = $("scope-id").value.trim();
+        const memberId = $("target-member-id").value.trim();
+        render(
+          "assign-out",
+          await call("GET", `/${scope}/${scopeId}/members/${memberId}/roles`),
+        );
+      };
+
+      // Fill the scope-id fields (assign + invite) with an org/activity id.
+      function useScopeId(id) {
+        if (!id) return;
+        $("scope-type").value = "organizations";
+        $("scope-id").value = id;
+        $("inv-scope-type").value = "organizations";
+        $("inv-scope-id").value = id;
+        populateRoleSelect("assign-role-id", "ORG");
+        populateRoleSelect("inv-role-id", "ORG");
+      }
+
+      // --- Organizations ---
+      $("btn-create-org").onclick = async () => {
+        const name = $("new-org-name").value.trim();
+        const slug = $("new-org-slug").value.trim();
+        const result = await call("POST", "/organizations", { name, slug });
+        render("orgs-out", result);
+        if (result.ok && result.data.id) useScopeId(result.data.id);
+        await refreshMe(); // creator becomes Owner → perms changed
+      };
+
+      $("btn-list-orgs").onclick = async () => {
+        const result = await call("GET", "/organizations");
+        render("orgs-out", result);
+        if (result.ok && Array.isArray(result.data) && result.data[0]) {
+          useScopeId(result.data[0].id);
+        }
+      };
+
+      // --- Invitations ---
+      $("btn-send-invite").onclick = async () => {
+        const scope = $("inv-scope-type").value;
+        const scopeId = $("inv-scope-id").value.trim();
+        const result = await call("POST", `/${scope}/${scopeId}/invitations`, {
+          email: $("inv-email").value.trim(),
+          roleId: $("inv-role-id").value,
+        });
+        render("invites-out", result);
+        // Auto-fill the accept box so you can switch user and accept right away.
+        if (result.ok && result.data.token) {
+          $("accept-token").value = result.data.token;
+        }
+      };
+
+      $("btn-list-invites").onclick = async () => {
+        const scope = $("inv-scope-type").value;
+        const scopeId = $("inv-scope-id").value.trim();
+        render(
+          "invites-out",
+          await call("GET", `/${scope}/${scopeId}/invitations`),
+        );
+      };
+
+      $("btn-accept-invite").onclick = async () => {
+        const token = $("accept-token").value.trim();
+        render("invites-out", await call("POST", "/invitations/accept", { token }));
+        await refreshMe();
+      };
+
+      $("btn-reject-invite").onclick = async () => {
+        const token = $("accept-token").value.trim();
+        render("invites-out", await call("POST", "/invitations/reject", { token }));
+      };
+
+      // Auto /me + load role catalog on startup
+      refreshMe();
+      loadRoleCatalog();
+    </script>
+  </body>
+</html>

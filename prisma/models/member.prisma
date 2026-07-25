@@ -13,12 +13,15 @@ model Member {
   jobTitle     String?      @map("job_title") @db.VarChar(100)
   avatarUrl    String?      @map("avatar_url") @db.Text
   status       MemberStatus @default(ACTIVE)
+  tokenVersion Int          @default(1) @map("token_version")
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
 
-  providers   MemberProvider[]
-  memberLinks MemberLink[]
-  memberRoles MemberRole[]
+  providers       MemberProvider[]
+  memberLinks     MemberLink[]
+  memberships     Membership[]
+  refreshTokens   RefreshToken[]
+  invitationsSent Invitation[]     @relation("InvitationsSent")
 
   @@map("members")
 }
@@ -50,15 +53,3 @@ model MemberLink {
   @@map("member_links")
 }
 
-model MemberRole {
-  memberId  String   @map("member_id") @db.Uuid
-  roleId    String   @map("role_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-  @@id([memberId, roleId])
-  @@map("member_roles")
-}
