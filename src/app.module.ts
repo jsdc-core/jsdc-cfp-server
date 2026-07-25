@@ -8,6 +8,7 @@ import { ActivityModule } from "./activity/activity.module";
 import { RbacModule } from "./rbac/rbac.module";
 import { OrganizationModule } from "./organization/organization.module";
 import { InvitationModule } from "./invitation/invitation.module";
+import { MemberModule } from "./member/member.module";
 import { ConfigModule } from "@nestjs/config";
 
 @Module({
@@ -25,6 +26,7 @@ import { ConfigModule } from "@nestjs/config";
     RbacModule,
     OrganizationModule,
     InvitationModule,
+    MemberModule,
   ],
   controllers: [AppController],
   providers: [AppService],
