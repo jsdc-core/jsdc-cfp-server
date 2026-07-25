@@ -7,7 +7,6 @@
     "^.+\\.(t|j)s$": "ts-jest"
   },
   "transformIgnorePatterns": ["node_modules/(?!(.*/)?(passport-jwt)/)"],
-  "setupFilesAfterEach": [],
   "setupFiles": ["<rootDir>/jest-e2e.setup.ts"],
   "moduleNameMapper": {
     "^src/(.*)$": "<rootDir>/../src/$1",
